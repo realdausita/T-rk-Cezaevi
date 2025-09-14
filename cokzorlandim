@@ -1,0 +1,180 @@
+-- Başlangıç / servisler
+local Camera = workspace.CurrentCamera
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Holding = false
+
+-- Fluent & SaveManager yükleme
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Türk Cezaevi |",
+    SubTitle = "made by dausita😝",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false,
+    Theme = "Rose",
+    MinimizeKey = Enum.KeyCode.RightShift
+})
+
+local Tabs = {
+    Information = Window:AddTab({ Title = "Information", Icon = "scroll" }),
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Visual = Window:AddTab({ Title = "Visual", Icon = "eye"}),
+    Misc = Window:AddTab({ Title = "Misc", Icon = ""}),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:SetFolder("TURKCEZAEVIRP")
+InterfaceManager:SetFolder("TURKCEZAEVIRP")
+SaveManager:IgnoreThemeSettings()
+
+Fluent:Notify({ Title = "UYARI!", Content = "Bu Script Dausita Tarafından Yapılmıştır.", Duration = 4 })
+
+-- Vars (başlangıç: aimbot kapalı)
+_G.AimbotEnabled = false
+_G.TeamCheck = true
+_G.AimPart = "Head"
+_G.Sensitivity = 0.1
+
+_G.FOVEnabled = true
+_G.CircleColor = Color3.fromRGB(255,255,255)
+_G.CircleTransparency = 0.7
+_G.CircleRadius = 250
+_G.CircleFilled = false
+_G.CircleVisible = true
+_G.CircleThickness = 1
+
+-- Drawing FOV circle
+local FOVCircle = Drawing.new("Circle")
+local function UpdateFOVCircle()
+    FOVCircle.Radius = _G.CircleRadius
+    FOVCircle.Filled = _G.CircleFilled
+    FOVCircle.Color = _G.CircleColor
+    FOVCircle.Visible = (_G.CircleVisible and _G.FOVEnabled)
+    FOVCircle.Transparency = _G.CircleTransparency
+    FOVCircle.Thickness = _G.CircleThickness
+end
+UpdateFOVCircle()
+
+-- Closest player function
+local function GetClosestPlayer()
+    local MaximumDistance = _G.CircleRadius
+    local Target = nil
+
+    for _, v in ipairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+            if _G.TeamCheck and v.Team == LocalPlayer.Team then
+                continue
+            end
+
+            local ScreenPoint, OnScreen = Camera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
+            if OnScreen then
+                local mousePos = UserInputService:GetMouseLocation()
+                local VectorDistance = (Vector2.new(mousePos.X, mousePos.Y) - Vector2.new(ScreenPoint.X, ScreenPoint.Y)).Magnitude
+
+                if VectorDistance < MaximumDistance then
+                    MaximumDistance = VectorDistance
+                    Target = v
+                end
+            end
+        end
+    end
+
+    return Target
+end
+
+-- Mouse input
+UserInputService.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Holding = true
+    end
+end)
+UserInputService.InputEnded:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Holding = false
+    end
+end)
+
+-- UI: Main tab
+Tabs.Main:AddToggle("AimbotToggle", {
+    Title = "Aimbot",
+    Default = _G.AimbotEnabled,
+    Callback = function(state)
+        _G.AimbotEnabled = state
+    end
+})
+
+Tabs.Main:AddToggle("FOVToggle", {
+    Title = "Show FOV",
+    Default = _G.FOVEnabled,
+    Callback = function(state)
+        _G.FOVEnabled = state
+        UpdateFOVCircle()
+    end
+})
+
+Tabs.Main:AddToggle("TeamCheckToggle", {
+    Title = "Team Check",
+    Default = _G.TeamCheck,
+    Callback = function(state)
+        _G.TeamCheck = state
+    end
+})
+
+Tabs.Main:AddDropdown("AimPartDropdown", {
+    Title = "Aim Part",
+    Values = {"Head", "HumanoidRootPart", "Torso"},
+    Default = 1,
+    Callback = function(val)
+        _G.AimPart = val
+    end
+})
+
+Tabs.Main:AddSlider("Sensitivity", {
+    Title = "Aimbot Sensitivity",
+    Description = "Changes Aimbot Speed",
+    Default = _G.Sensitivity,
+    Min = 0.01,
+    Max = 1,
+    Rounding = 2,
+    Callback = function(val)
+        _G.Sensitivity = val
+    end
+})
+
+Tabs.Main:AddSlider("FOVRadius", {
+    Title = "FOV Radius",
+    Description = "",
+    Default = _G.CircleRadius,
+    Min = 0,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(val)
+        _G.CircleRadius = val
+        UpdateFOVCircle()
+    end
+})
+
+-- Aim loop
+RunService.RenderStepped:Connect(function()
+    local mousePos = UserInputService:GetMouseLocation()
+    FOVCircle.Position = mousePos
+    UpdateFOVCircle()
+
+    if Holding and _G.AimbotEnabled and (_G.CircleRadius > 0) and _G.FOVEnabled then
+        local Target = GetClosestPlayer()
+        if Target and Target.Character and Target.Character:FindFirstChild(_G.AimPart) then
+            local TargetPos = Target.Character[_G.AimPart].Position
+            local CameraPos = Camera.CFrame.Position
+            local Direction = (TargetPos - CameraPos).unit
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(CameraPos, CameraPos + Direction), _G.Sensitivity)
+        end
+    end
+end)
